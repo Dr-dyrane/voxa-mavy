@@ -1,4 +1,5 @@
 
+import { useEffect } from "react";
 import { useChatStore } from "@/store/chatStore";
 import { ChatList } from "@/components/Chat/ChatList";
 import { ChatWindow } from "@/components/Chat/ChatWindow";
@@ -7,6 +8,22 @@ import { Navigate } from "react-router-dom";
 
 export default function Chat() {
   const { isAuthenticated } = useUserStore();
+  const { fetchConversations, initializeRealtime } = useChatStore();
+  
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Fetch conversations when the component mounts
+      fetchConversations();
+      
+      // Initialize realtime listeners
+      const cleanup = initializeRealtime();
+      
+      // Clean up listeners when component unmounts
+      return () => {
+        if (cleanup) cleanup();
+      };
+    }
+  }, [isAuthenticated, fetchConversations, initializeRealtime]);
   
   if (!isAuthenticated) {
     return <Navigate to="/auth" replace />;

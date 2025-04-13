@@ -23,12 +23,22 @@ interface Conversation {
   createdAt: Date;
 }
 
+interface User {
+  id: string;
+  username: string;
+  avatarUrl?: string;
+  status: "online" | "offline" | "away" | "busy";
+  lastSeen: Date;
+}
+
 interface ChatStore {
   conversations: Conversation[];
   activeConversationId: string | null;
   messages: Record<string, Message[]>;
   isTyping: Record<string, boolean>;
   isLoadingMessages: boolean;
+  users: Record<string, User>;
+  isLoadingUsers: boolean;
   
   // Actions
   setActiveConversation: (id: string | null) => void;
@@ -37,92 +47,47 @@ interface ChatStore {
   fetchMessages: (conversationId: string) => Promise<void>;
   sendMessage: (content: string, type?: Message["type"]) => Promise<void>;
   fetchConversations: () => Promise<void>;
-  initializeRealtime: () => void;
+  fetchUsers: () => Promise<void>;
+  initializeRealtime: () => (() => void) | undefined;
+  getUserById: (id: string) => User | null;
 }
 
-// Mock data for UI development
-const mockUser1 = {
-  id: "user1",
-  username: "johndoe",
-  avatarUrl: "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?ixlib=rb-4.0.3",
-  status: "online" as const,
-  lastSeen: new Date(), // Add lastSeen property
-};
-
-const mockUser2 = {
-  id: "user2",
-  username: "janedoe",
-  avatarUrl: "https://images.unsplash.com/photo-1582562124811-c09040d0a901?ixlib=rb-4.0.3",
-  status: "online" as const,
-  lastSeen: new Date(), // Add lastSeen property
-};
-
-const mockConversations: Conversation[] = [
-  {
-    id: "conv1",
-    participantIds: ["user1", "user2"],
-    updatedAt: new Date(),
-    createdAt: new Date(Date.now() - 86400000), // 1 day ago
-  }
-];
-
-const mockMessages: Record<string, Message[]> = {
-  "conv1": [
-    {
-      id: "msg1",
-      senderId: "user2",
-      receiverId: "user1",
-      content: "Hello! How are you doing today?",
-      type: "text",
-      isRead: true,
-      createdAt: new Date(Date.now() - 3600000), // 1 hour ago
-    },
-    {
-      id: "msg2",
-      senderId: "user1",
-      receiverId: "user2",
-      content: "I'm good, thanks! Just trying out this new Voxa app. The interface looks really clean.",
-      type: "text",
-      isRead: true,
-      createdAt: new Date(Date.now() - 3500000), 
-    },
-    {
-      id: "msg3",
-      senderId: "user2",
-      receiverId: "user1",
-      content: "Yes, I love the design! Those gradient accents are a nice touch.",
-      type: "text",
-      isRead: true,
-      createdAt: new Date(Date.now() - 3400000),
-    },
-    {
-      id: "msg4",
-      senderId: "user1",
-      receiverId: "user2",
-      content: "Agreed! Should we try a voice call to test that feature too?",
-      type: "text",
-      isRead: false,
-      createdAt: new Date(Date.now() - 1800000), // 30 min ago
-    }
-  ]
-};
-
 export const useChatStore = create<ChatStore>()((set, get) => ({
-  conversations: mockConversations,
+  conversations: [],
   activeConversationId: null,
-  messages: mockMessages,
+  messages: {},
   isTyping: {},
   isLoadingMessages: false,
+  users: {},
+  isLoadingUsers: false,
   
   setActiveConversation: (id) => set({ activeConversationId: id }),
   
   addMessage: (message) => {
     set((state) => {
-      const conversationId = message.senderId === get().activeConversationId ||
-                             message.receiverId === get().activeConversationId 
-                           ? get().activeConversationId 
-                           : null;
-                           
+      // Find the conversation for this message
+      const currentUser = useUserStore.getState().user;
+      if (!currentUser) return state;
+      
+      // Determine which conversation this belongs to
+      let conversationId = state.activeConversationId;
+      
+      // If we don't have an active conversation, try to find one with these participants
+      if (!conversationId) {
+        const otherUserId = message.senderId === currentUser.id 
+          ? message.receiverId 
+          : message.senderId;
+          
+        const conversation = state.conversations.find(c => 
+          c.participantIds.includes(currentUser.id) && 
+          c.participantIds.includes(otherUserId)
+        );
+        
+        if (conversation) {
+          conversationId = conversation.id;
+        }
+      }
+      
       if (!conversationId) return state;
       
       const conversationMessages = [...(state.messages[conversationId] || [])];
@@ -278,7 +243,7 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
           .from('conversations')
           .update({ 
             last_message_id: data[0].id,
-            updated_at: new Date()
+            updated_at: new Date().toISOString()
           })
           .eq('id', conversationId);
       }
@@ -332,6 +297,48 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
     }
   },
   
+  fetchUsers: async () => {
+    set({ isLoadingUsers: true });
+    
+    try {
+      const { data: usersData, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('username');
+        
+      if (error) {
+        toast.error("Error fetching users", {
+          description: error.message
+        });
+        return;
+      }
+      
+      if (usersData) {
+        const usersRecord: Record<string, User> = {};
+        
+        usersData.forEach(user => {
+          usersRecord[user.id] = {
+            id: user.id,
+            username: user.username,
+            avatarUrl: user.avatar_url,
+            status: user.status as "online" | "offline" | "away" | "busy",
+            lastSeen: new Date(user.last_seen)
+          };
+        });
+        
+        set({ 
+          users: usersRecord,
+          isLoadingUsers: false
+        });
+      }
+    } catch (err: any) {
+      toast.error("Error fetching users", {
+        description: err.message
+      });
+      set({ isLoadingUsers: false });
+    }
+  },
+  
   initializeRealtime: () => {
     const currentUser = useUserStore.getState().user;
     if (!currentUser) return;
@@ -373,24 +380,30 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
       )
       .subscribe();
       
-    // Listen for typing indicators (this would require a separate table or 
-    // could be implemented with Presence features)
-    
+    // Listen for user presence changes
+    const presenceChannel = supabase
+      .channel('public:presence')
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'presence'
+        },
+        (payload) => {
+          // Refresh users to get updated presence
+          get().fetchUsers();
+        }
+      )
+      .subscribe();
+      
     // Return cleanup function for components to call
     return () => {
       supabase.removeChannel(messageChannel);
+      supabase.removeChannel(presenceChannel);
     };
+  },
+  
+  getUserById: (id) => {
+    return get().users[id] || null;
   }
 }));
-
-// Mock users data store - this would be replaced by a real implementation
-export const useUserData = () => {
-  return {
-    getUserById: (id: string) => {
-      if (id === "user1") return mockUser1;
-      if (id === "user2") return mockUser2;
-      return null;
-    },
-    currentUser: mockUser1,
-  };
-};

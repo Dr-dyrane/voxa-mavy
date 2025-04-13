@@ -1,5 +1,5 @@
 
-import { Message } from "@/store/chatStore";
+import { Message, useChatStore } from "@/store/chatStore";
 import { formatDistanceToNow } from "date-fns";
 import { User } from "@/store/userStore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -10,7 +10,9 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, currentUser }: MessageBubbleProps) {
+  const { getUserById } = useChatStore();
   const isCurrentUser = message.senderId === currentUser.id;
+  const sender = isCurrentUser ? currentUser : getUserById(message.senderId);
   
   return (
     <div
@@ -20,8 +22,10 @@ export function MessageBubble({ message, currentUser }: MessageBubbleProps) {
     >
       {!isCurrentUser && (
         <Avatar className="h-8 w-8">
-          <AvatarImage src="https://images.unsplash.com/photo-1582562124811-c09040d0a901?ixlib=rb-4.0.3" />
-          <AvatarFallback className="bg-accent text-accent-foreground">JD</AvatarFallback>
+          <AvatarImage src={sender?.avatarUrl} />
+          <AvatarFallback className="bg-accent text-accent-foreground">
+            {sender?.username?.substring(0, 2).toUpperCase() || "U"}
+          </AvatarFallback>
         </Avatar>
       )}
       

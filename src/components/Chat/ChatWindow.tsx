@@ -2,27 +2,35 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Paperclip, Smile, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useChatStore, useUserData } from "@/store/chatStore";
+import { useChatStore } from "@/store/chatStore";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TypingIndicator } from "./TypingIndicator";
 import { MessageBubble } from "./MessageBubble";
+import { useUserStore } from "@/store/userStore";
 
 export function ChatWindow() {
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { getUserById, currentUser } = useUserData();
+  const { user: currentUser } = useUserStore();
   const { 
     activeConversationId, 
     messages, 
     sendMessage,
     isTyping,
-    setTypingStatus
+    setTypingStatus,
+    conversations,
+    fetchUsers,
+    getUserById
   } = useChatStore();
   
   const conversationMessages = activeConversationId ? messages[activeConversationId] : [];
+  
+  useEffect(() => {
+    // Fetch users data when component mounts
+    fetchUsers();
+  }, [fetchUsers]);
   
   const handleSendMessage = () => {
     if (message.trim() && activeConversationId) {
@@ -65,9 +73,20 @@ export function ChatWindow() {
     );
   }
   
-  // In a real app, we'd get this from the conversation
-  const otherUserId = "user2";
-  const otherUser = getUserById(otherUserId);
+  // Find the active conversation
+  const activeConversation = conversations.find(c => c.id === activeConversationId);
+  
+  if (!activeConversation || !currentUser) {
+    return null;
+  }
+  
+  // Get the other user in the conversation
+  const otherUserId = activeConversation.participantIds.find(id => id !== currentUser.id);
+  const otherUser = otherUserId ? getUserById(otherUserId) : null;
+  
+  if (!otherUser) {
+    return null;
+  }
   
   return (
     <div className="flex flex-col h-full">
@@ -75,16 +94,20 @@ export function ChatWindow() {
       <div className="p-4 border-b flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Avatar>
-            <AvatarImage src={otherUser?.avatarUrl} />
+            <AvatarImage src={otherUser.avatarUrl} />
             <AvatarFallback className="bg-accent text-accent-foreground">
-              {otherUser?.username?.substring(0, 2).toUpperCase() || "U"}
+              {otherUser.username?.substring(0, 2).toUpperCase() || "U"}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h3 className="font-medium">{otherUser?.username}</h3>
+            <h3 className="font-medium">{otherUser.username}</h3>
             <div className="flex items-center space-x-1">
-              <span className="h-2 w-2 rounded-full bg-green-500" />
-              <span className="text-xs text-muted-foreground">Online</span>
+              <span className={`h-2 w-2 rounded-full ${
+                otherUser.status === 'online' ? 'bg-green-500' : 
+                otherUser.status === 'away' ? 'bg-yellow-500' : 
+                'bg-gray-400'
+              }`} />
+              <span className="text-xs text-muted-foreground">{otherUser.status}</span>
             </div>
           </div>
         </div>
@@ -110,7 +133,7 @@ export function ChatWindow() {
       
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {conversationMessages.map((message) => (
+        {conversationMessages && conversationMessages.map((message) => (
           <MessageBubble
             key={message.id}
             message={message}
@@ -118,12 +141,12 @@ export function ChatWindow() {
           />
         ))}
         
-        {isTyping[activeConversationId] && (
+        {activeConversationId && isTyping[activeConversationId] && (
           <div className="flex items-start gap-2">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={otherUser?.avatarUrl} />
+              <AvatarImage src={otherUser.avatarUrl} />
               <AvatarFallback className="bg-accent text-accent-foreground">
-                {otherUser?.username?.substring(0, 2).toUpperCase()}
+                {otherUser.username?.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <TypingIndicator />
