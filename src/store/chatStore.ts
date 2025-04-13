@@ -1,4 +1,3 @@
-
 import { create } from "zustand";
 
 export interface Message {
@@ -41,6 +40,7 @@ const mockUser1 = {
   username: "johndoe",
   avatarUrl: "https://images.unsplash.com/photo-1618160702438-9b02ab6515c9?ixlib=rb-4.0.3",
   status: "online" as const,
+  lastSeen: new Date(), // Add lastSeen property
 };
 
 const mockUser2 = {
@@ -48,6 +48,7 @@ const mockUser2 = {
   username: "janedoe",
   avatarUrl: "https://images.unsplash.com/photo-1582562124811-c09040d0a901?ixlib=rb-4.0.3",
   status: "online" as const,
+  lastSeen: new Date(), // Add lastSeen property
 };
 
 const mockConversations: Conversation[] = [
