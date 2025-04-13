@@ -1,6 +1,8 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export interface User {
   id: string;
@@ -20,12 +22,12 @@ interface UserStore {
   logout: () => Promise<void>;
   setUser: (user: User | null) => void;
   clearError: () => void;
+  refreshUser: () => Promise<void>;
 }
 
-// This is a placeholder store for future integration with Supabase auth
 export const useUserStore = create<UserStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       isLoading: false,
@@ -34,58 +36,244 @@ export const useUserStore = create<UserStore>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true, error: null });
         
-        // Mock successful login for UI development
-        setTimeout(() => {
-          set({
-            isLoading: false,
-            isAuthenticated: true,
-            user: {
-              id: "1",
-              username: email.split("@")[0],
-              status: "online",
-              lastSeen: new Date(),
-            },
+        try {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
           });
-        }, 1000);
+          
+          if (error) {
+            set({ isLoading: false, error: error.message });
+            toast.error("Login failed", {
+              description: error.message
+            });
+            return;
+          }
+          
+          if (data.user) {
+            // Fetch user profile from our users table
+            const { data: userData, error: userError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', data.user.id)
+              .single();
+              
+            if (userError || !userData) {
+              // If no profile exists, create one
+              await supabase.from('users').insert([
+                {
+                  id: data.user.id,
+                  username: email.split('@')[0],
+                  status: 'online',
+                  last_seen: new Date()
+                }
+              ]);
+              
+              // Then fetch the new user
+              const { data: newUserData } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', data.user.id)
+                .single();
+                
+              if (newUserData) {
+                set({
+                  isAuthenticated: true,
+                  user: {
+                    id: newUserData.id,
+                    username: newUserData.username,
+                    avatarUrl: newUserData.avatar_url,
+                    status: newUserData.status as "online" | "offline" | "away" | "busy",
+                    lastSeen: new Date(newUserData.last_seen)
+                  }
+                });
+              }
+            } else {
+              // User profile exists
+              set({
+                isAuthenticated: true,
+                user: {
+                  id: userData.id,
+                  username: userData.username,
+                  avatarUrl: userData.avatar_url,
+                  status: userData.status as "online" | "offline" | "away" | "busy",
+                  lastSeen: new Date(userData.last_seen)
+                }
+              });
+            }
+            
+            // Update user presence
+            await supabase.from('presence').upsert({
+              user_id: data.user.id,
+              status: 'online',
+              last_seen: new Date()
+            });
+            
+            toast.success("Welcome back!", {
+              description: "You've successfully logged in."
+            });
+          }
+        } catch (err: any) {
+          set({ error: err.message });
+          toast.error("Login failed", {
+            description: err.message
+          });
+        } finally {
+          set({ isLoading: false });
+        }
       },
       
       register: async (email: string, password: string, username: string) => {
         set({ isLoading: true, error: null });
         
-        // Mock successful registration for UI development
-        setTimeout(() => {
-          set({
-            isLoading: false,
-            isAuthenticated: true,
-            user: {
-              id: "1",
-              username,
-              status: "online",
-              lastSeen: new Date(),
-            },
+        try {
+          // First, check if username is available
+          const { data: existingUser, error: checkError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', username)
+            .single();
+            
+          if (existingUser) {
+            set({ isLoading: false, error: "Username is already taken." });
+            toast.error("Registration failed", {
+              description: "Username is already taken."
+            });
+            return;
+          }
+          
+          const { data, error } = await supabase.auth.signUp({
+            email,
+            password
           });
-        }, 1000);
+          
+          if (error) {
+            set({ isLoading: false, error: error.message });
+            toast.error("Registration failed", {
+              description: error.message
+            });
+            return;
+          }
+          
+          if (data.user) {
+            // Create user profile
+            await supabase.from('users').insert([
+              {
+                id: data.user.id,
+                username,
+                status: 'online',
+                last_seen: new Date()
+              }
+            ]);
+            
+            // Create presence entry
+            await supabase.from('presence').insert({
+              user_id: data.user.id,
+              status: 'online',
+              last_seen: new Date()
+            });
+            
+            set({
+              isAuthenticated: true,
+              user: {
+                id: data.user.id,
+                username,
+                status: 'online',
+                lastSeen: new Date()
+              }
+            });
+            
+            toast.success("Welcome to Voxa!", {
+              description: "Your account has been created successfully."
+            });
+          }
+        } catch (err: any) {
+          set({ error: err.message });
+          toast.error("Registration failed", {
+            description: err.message
+          });
+        } finally {
+          set({ isLoading: false });
+        }
       },
       
       logout: async () => {
         set({ isLoading: true });
         
-        // Mock successful logout
-        setTimeout(() => {
+        try {
+          // Update user presence status before logout
+          if (get().user) {
+            await supabase.from('presence').upsert({
+              user_id: get().user?.id,
+              status: 'offline',
+              last_seen: new Date()
+            });
+          }
+          
+          const { error } = await supabase.auth.signOut();
+          
+          if (error) {
+            set({ isLoading: false, error: error.message });
+            toast.error("Logout failed", {
+              description: error.message
+            });
+            return;
+          }
+          
           set({
             isLoading: false,
             isAuthenticated: false,
             user: null,
           });
-        }, 500);
+          
+          toast.info("Logged out", {
+            description: "You have been successfully logged out."
+          });
+        } catch (err: any) {
+          set({ isLoading: false, error: err.message });
+        }
       },
       
       setUser: (user) => set({ user, isAuthenticated: !!user }),
       clearError: () => set({ error: null }),
+      refreshUser: async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          
+          if (!user) {
+            set({ user: null, isAuthenticated: false });
+            return;
+          }
+          
+          // Get user profile
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+            
+          if (error || !userData) {
+            set({ user: null, isAuthenticated: false });
+            return;
+          }
+          
+          set({
+            isAuthenticated: true,
+            user: {
+              id: userData.id,
+              username: userData.username,
+              avatarUrl: userData.avatar_url,
+              status: userData.status as "online" | "offline" | "away" | "busy",
+              lastSeen: new Date(userData.last_seen)
+            }
+          });
+        } catch (err) {
+          set({ user: null, isAuthenticated: false });
+        }
+      }
     }),
     {
       name: "voxa-user-store",
-      // Only store non-sensitive data
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         user: state.user,
@@ -93,3 +281,16 @@ export const useUserStore = create<UserStore>()(
     }
   )
 );
+
+// Setup auth state listener
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    const store = useUserStore.getState();
+    
+    if (event === 'SIGNED_IN' && session) {
+      // Don't need to do anything here since refreshUser will be called in App.tsx
+    } else if (event === 'SIGNED_OUT') {
+      store.setUser(null);
+    }
+  });
+}

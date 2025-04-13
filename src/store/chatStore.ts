@@ -1,4 +1,8 @@
+
 import { create } from "zustand";
+import { supabase } from "@/integrations/supabase/client";
+import { useUserStore } from "@/store/userStore";
+import { toast } from "sonner";
 
 export interface Message {
   id: string;
@@ -32,6 +36,8 @@ interface ChatStore {
   setTypingStatus: (conversationId: string, isTyping: boolean) => void;
   fetchMessages: (conversationId: string) => Promise<void>;
   sendMessage: (content: string, type?: Message["type"]) => Promise<void>;
+  fetchConversations: () => Promise<void>;
+  initializeRealtime: () => void;
 }
 
 // Mock data for UI development
@@ -112,11 +118,24 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   
   addMessage: (message) => {
     set((state) => {
-      const conversationId = state.activeConversationId;
+      const conversationId = message.senderId === get().activeConversationId ||
+                             message.receiverId === get().activeConversationId 
+                           ? get().activeConversationId 
+                           : null;
+                           
       if (!conversationId) return state;
       
       const conversationMessages = [...(state.messages[conversationId] || [])];
-      conversationMessages.push(message);
+      
+      // Check if message already exists
+      if (!conversationMessages.find(msg => msg.id === message.id)) {
+        conversationMessages.push(message);
+      }
+      
+      // Sort by createdAt
+      conversationMessages.sort((a, b) => 
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
       
       return {
         messages: {
@@ -137,36 +156,231 @@ export const useChatStore = create<ChatStore>()((set, get) => ({
   },
   
   fetchMessages: async (conversationId) => {
+    const currentUser = useUserStore.getState().user;
+    if (!currentUser) return;
+    
     set({ isLoadingMessages: true });
     
-    // Mock API call delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    set({ 
-      isLoadingMessages: false,
-      // In a real implementation, we would fetch from Supabase
-    });
+    try {
+      const { data: messagesData, error } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`sender_id.eq.${currentUser.id},receiver_id.eq.${currentUser.id}`)
+        .order('created_at', { ascending: true });
+      
+      if (error) {
+        toast.error("Error fetching messages", {
+          description: error.message
+        });
+        return;
+      }
+      
+      if (messagesData) {
+        const messages = messagesData.map(msg => ({
+          id: msg.id,
+          senderId: msg.sender_id,
+          receiverId: msg.receiver_id,
+          content: msg.content,
+          type: msg.type as Message["type"],
+          emoji: msg.emoji,
+          isRead: msg.is_read,
+          createdAt: new Date(msg.created_at)
+        }));
+        
+        // Group messages by conversation
+        const messagesByConversation: Record<string, Message[]> = {};
+        messages.forEach(message => {
+          const otherUserId = message.senderId === currentUser.id 
+            ? message.receiverId 
+            : message.senderId;
+            
+          // Find conversation with this user
+          const conversation = get().conversations.find(conv => 
+            conv.participantIds.includes(currentUser.id) && 
+            conv.participantIds.includes(otherUserId)
+          );
+          
+          if (conversation) {
+            if (!messagesByConversation[conversation.id]) {
+              messagesByConversation[conversation.id] = [];
+            }
+            messagesByConversation[conversation.id].push(message);
+          }
+        });
+        
+        set({ 
+          messages: messagesByConversation,
+          isLoadingMessages: false
+        });
+      }
+    } catch (err: any) {
+      toast.error("Error fetching messages", {
+        description: err.message
+      });
+      set({ isLoadingMessages: false });
+    }
   },
   
   sendMessage: async (content, type = "text") => {
     const conversationId = get().activeConversationId;
-    if (!conversationId) return;
+    const currentUser = useUserStore.getState().user;
     
-    const newMessage: Message = {
-      id: `msg${Date.now()}`,
-      senderId: "user1", // Current user ID would come from auth
-      receiverId: "user2", // This would be determined by the conversation
+    if (!conversationId || !currentUser) return;
+    
+    // Get the conversation to find the receiver
+    const conversation = get().conversations.find(c => c.id === conversationId);
+    if (!conversation) return;
+    
+    // Find the receiver ID (the participant that isn't the current user)
+    const receiverId = conversation.participantIds.find(id => id !== currentUser.id);
+    if (!receiverId) return;
+    
+    // Create message structure
+    const message = {
+      sender_id: currentUser.id,
+      receiver_id: receiverId,
       content,
       type,
-      isRead: false,
-      createdAt: new Date(),
+      is_read: false,
     };
     
-    get().addMessage(newMessage);
-    
-    // In a real app, this would send to Supabase
-    // await supabaseClient.from("messages").insert(newMessage);
+    try {
+      // Insert into Supabase
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([message])
+        .select();
+        
+      if (error) {
+        toast.error("Failed to send message", {
+          description: error.message
+        });
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        // Update local state with the sent message
+        const newMessage: Message = {
+          id: data[0].id,
+          senderId: data[0].sender_id,
+          receiverId: data[0].receiver_id,
+          content: data[0].content,
+          type: data[0].type as Message["type"],
+          emoji: data[0].emoji,
+          isRead: data[0].is_read,
+          createdAt: new Date(data[0].created_at)
+        };
+        
+        get().addMessage(newMessage);
+        
+        // Update the conversation's last_message_id
+        await supabase
+          .from('conversations')
+          .update({ 
+            last_message_id: data[0].id,
+            updated_at: new Date()
+          })
+          .eq('id', conversationId);
+      }
+    } catch (err: any) {
+      toast.error("Failed to send message", {
+        description: err.message
+      });
+    }
   },
+  
+  fetchConversations: async () => {
+    const currentUser = useUserStore.getState().user;
+    if (!currentUser) return;
+    
+    try {
+      const { data: conversationsData, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .contains('participant_ids', [currentUser.id])
+        .order('updated_at', { ascending: false });
+        
+      if (error) {
+        toast.error("Error fetching conversations", {
+          description: error.message
+        });
+        return;
+      }
+      
+      if (conversationsData) {
+        const conversations: Conversation[] = conversationsData.map(conv => ({
+          id: conv.id,
+          participantIds: conv.participant_ids,
+          lastMessageId: conv.last_message_id,
+          updatedAt: new Date(conv.updated_at),
+          createdAt: new Date(conv.created_at)
+        }));
+        
+        set({ conversations });
+        
+        // If there are conversations, fetch messages for each
+        if (conversations.length > 0) {
+          conversations.forEach(conv => {
+            get().fetchMessages(conv.id);
+          });
+        }
+      }
+    } catch (err: any) {
+      toast.error("Error fetching conversations", {
+        description: err.message
+      });
+    }
+  },
+  
+  initializeRealtime: () => {
+    const currentUser = useUserStore.getState().user;
+    if (!currentUser) return;
+    
+    // Listen for new messages
+    const messageChannel = supabase
+      .channel('public:messages')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `receiver_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          // New message received
+          const messageData = payload.new;
+          
+          const newMessage: Message = {
+            id: messageData.id,
+            senderId: messageData.sender_id,
+            receiverId: messageData.receiver_id,
+            content: messageData.content,
+            type: messageData.type as Message["type"],
+            emoji: messageData.emoji,
+            isRead: messageData.is_read,
+            createdAt: new Date(messageData.created_at)
+          };
+          
+          get().addMessage(newMessage);
+          
+          // Create notification for new message
+          if (messageData.sender_id !== currentUser.id) {
+            toast("New message", {
+              description: `${newMessage.content.substring(0, 30)}${newMessage.content.length > 30 ? '...' : ''}`,
+            });
+          }
+        }
+      )
+      .subscribe();
+      
+    // Listen for typing indicators (this would require a separate table or 
+    // could be implemented with Presence features)
+    
+    // Return cleanup function for components to call
+    return () => {
+      supabase.removeChannel(messageChannel);
+    };
+  }
 }));
 
 // Mock users data store - this would be replaced by a real implementation
