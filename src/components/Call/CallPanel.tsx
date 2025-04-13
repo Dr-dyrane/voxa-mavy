@@ -3,8 +3,8 @@ import { useEffect, useRef } from "react";
 import { Mic, MicOff, Phone, Video, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useCallStore } from "@/store/callStore";
-import { useChatStore } from "@/store/chatStore";
+import { useCallStore } from "@/store/call/callStore";
+import { useChatStore } from "@/store/chat/chatStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 

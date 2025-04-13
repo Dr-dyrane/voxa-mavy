@@ -14,13 +14,19 @@ import Call from "./pages/Call";
 import Video from "./pages/Video";
 import Contacts from "./pages/Contacts";
 import NotFound from "./pages/NotFound";
-import { useUserStore } from "./store/userStore";
+import { useUserStore } from "./store/user/userStore";
+import { useCallStore } from "./store/call/callStore";
+import { useFriendsStore } from "./store/friends/friendsStore";
+import { usePresenceStore } from "./store/presence/presenceStore";
 import { supabase } from "./integrations/supabase/client";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   const { refreshUser } = useUserStore();
+  const { initializeCallStore } = useCallStore();
+  const { initializeRealtime: initializeFriendsRealtime } = useFriendsStore();
+  const { initializePresence } = usePresenceStore();
 
   useEffect(() => {
     // Initial auth check
@@ -39,6 +45,23 @@ const App = () => {
       subscription.unsubscribe();
     };
   }, [refreshUser]);
+
+  useEffect(() => {
+    const { isAuthenticated } = useUserStore.getState();
+    
+    if (isAuthenticated) {
+      // Initialize all real-time features when authenticated
+      const cleanupCall = initializeCallStore();
+      const cleanupFriends = initializeFriendsRealtime();
+      const cleanupPresence = initializePresence();
+      
+      return () => {
+        if (cleanupCall) cleanupCall();
+        if (cleanupFriends) cleanupFriends();
+        if (cleanupPresence) cleanupPresence();
+      };
+    }
+  }, [initializeCallStore, initializeFriendsRealtime, initializePresence]);
 
   return (
     <QueryClientProvider client={queryClient}>
