@@ -4,13 +4,13 @@ import { Mic, MicOff, Phone, Video, VideoOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCallStore } from "@/store/callStore";
-import { useUserData } from "@/store/chatStore";
+import { useChatStore } from "@/store/chatStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export function CallPanel() {
   const { activeCall, localStream, remoteStream, isMuted, isCameraOn, endCall, toggleMute, toggleCamera } = useCallStore();
-  const { getUserById } = useUserData();
+  const { getUserById } = useChatStore();
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   
