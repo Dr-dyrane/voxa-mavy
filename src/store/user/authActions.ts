@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { User } from "./types";
@@ -26,34 +25,58 @@ export const createAuthActions = (get: any, set: any) => ({
       console.log("Login successful, fetching user profile");
       
       if (data.user) {
-        // Fetch user profile from our users table
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-          
-        if (userError || !userData) {
-          console.log("No user profile found, creating one");
-          // If no profile exists, create one
-          await supabase.from('users').insert([
-            {
-              id: data.user.id,
-              username: email.split('@')[0],
-              status: 'online',
-              last_seen: new Date()
-            }
-          ]);
-          
-          // Then fetch the new user
-          const { data: newUserData } = await supabase
+        try {
+          // Fetch user profile from our users table
+          const { data: userData, error: userError } = await supabase
             .from('users')
             .select('*')
             .eq('id', data.user.id)
             .single();
             
-          if (newUserData) {
-            console.log("New user profile created and fetched");
+          if (userError || !userData) {
+            console.log("No user profile found, creating one");
+            // If no profile exists, create one
+            const { error: insertError } = await supabase.from('users').insert([
+              {
+                id: data.user.id,
+                username: email.split('@')[0],
+                status: 'online',
+                last_seen: new Date().toISOString()
+              }
+            ]);
+            
+            if (insertError) {
+              console.error("Error creating user profile:", insertError.message);
+              set({ 
+                isLoading: false, 
+                error: "Failed to create user profile"
+              });
+              toast.error("Login issue", {
+                description: "Failed to create user profile"
+              });
+              return;
+            }
+            
+            // Then fetch the new user
+            const { data: newUserData, error: fetchError } = await supabase
+              .from('users')
+              .select('*')
+              .eq('id', data.user.id)
+              .single();
+              
+            if (fetchError || !newUserData) {
+              console.error("Failed to fetch newly created user profile:", fetchError?.message);
+              set({ 
+                isLoading: false, 
+                error: "Failed to fetch user profile"
+              });
+              toast.error("Login issue", {
+                description: "Failed to fetch user profile"
+              });
+              return;
+            }
+            
+            console.log("New user profile created and fetched:", newUserData);
             set({
               isAuthenticated: true,
               user: {
@@ -63,45 +86,56 @@ export const createAuthActions = (get: any, set: any) => ({
                 status: newUserData.status as "online" | "offline" | "away" | "busy",
                 lastSeen: new Date(newUserData.last_seen)
               },
-              isLoading: false
+              isLoading: false,
+              error: null
             });
           } else {
-            // Make sure we still set isLoading to false even if we couldn't fetch the new user
-            console.error("Failed to fetch newly created user profile");
-            set({ isLoading: false, error: "Failed to fetch user profile" });
+            // User profile exists
+            console.log("Existing user profile found:", userData);
+            set({
+              isAuthenticated: true,
+              user: {
+                id: userData.id,
+                username: userData.username,
+                avatarUrl: userData.avatar_url,
+                status: userData.status as "online" | "offline" | "away" | "busy",
+                lastSeen: new Date(userData.last_seen)
+              },
+              isLoading: false,
+              error: null
+            });
           }
-        } else {
-          // User profile exists
-          console.log("Existing user profile found");
-          set({
-            isAuthenticated: true,
-            user: {
-              id: userData.id,
-              username: userData.username,
-              avatarUrl: userData.avatar_url,
-              status: userData.status as "online" | "offline" | "away" | "busy",
-              lastSeen: new Date(userData.last_seen)
-            },
-            isLoading: false
+          
+          // Update user presence
+          await supabase.from('presence').upsert({
+            user_id: data.user.id,
+            status: 'online',
+            last_seen: new Date().toISOString()
           });
+          
+          toast.success("Welcome back!", {
+            description: "You've successfully logged in."
+          });
+          
+          console.log("Login flow complete, authentication state updated");
+        } catch (err: any) {
+          console.error("Error processing user profile:", err.message);
+          set({ isLoading: false, error: err.message || "Error processing profile" });
+          toast.error("Login issue", {
+            description: err.message || "Error processing profile"
+          });
+          return;
         }
-        
-        // Update user presence
-        await supabase.from('presence').upsert({
-          user_id: data.user.id,
-          status: 'online',
-          last_seen: new Date()
+      } else {
+        console.error("Login succeeded but no user data returned");
+        set({ isLoading: false, error: "No user data returned" });
+        toast.error("Login issue", {
+          description: "No user data returned"
         });
-        
-        toast.success("Welcome back!", {
-          description: "You've successfully logged in."
-        });
-        
-        console.log("Login flow complete, authentication state updated");
       }
     } catch (err: any) {
       console.error("Login exception:", err.message);
-      set({ error: err.message, isLoading: false });
+      set({ isLoading: false, error: err.message });
       toast.error("Login failed", {
         description: err.message
       });
@@ -190,11 +224,16 @@ export const createAuthActions = (get: any, set: any) => ({
     try {
       // Update user presence status before logout
       if (get().user) {
-        await supabase.from('presence').upsert({
-          user_id: get().user?.id,
-          status: 'offline',
-          last_seen: new Date()
-        });
+        try {
+          await supabase.from('presence').upsert({
+            user_id: get().user?.id,
+            status: 'offline',
+            last_seen: new Date().toISOString()
+          });
+        } catch (presenceErr) {
+          console.error("Error updating presence during logout:", presenceErr);
+          // Continue with logout even if presence update fails
+        }
       }
       
       const { error } = await supabase.auth.signOut();
@@ -213,6 +252,7 @@ export const createAuthActions = (get: any, set: any) => ({
         isLoading: false,
         isAuthenticated: false,
         user: null,
+        error: null
       });
       
       console.log("Logout successful, reset authentication state");
@@ -222,8 +262,13 @@ export const createAuthActions = (get: any, set: any) => ({
       });
     } catch (err: any) {
       console.error("Logout exception:", err.message);
-      set({ isLoading: false, error: err.message, isAuthenticated: false, user: null });
-      // Still log the user out locally even if there was an error
+      // Always reset auth state on logout attempt, even if there was an error
+      set({ 
+        isLoading: false, 
+        error: err.message, 
+        isAuthenticated: false, 
+        user: null 
+      });
       toast.info("Logged out", {
         description: "You have been logged out."
       });
