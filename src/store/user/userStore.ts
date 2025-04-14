@@ -46,15 +46,5 @@ export const useUserStore = create<UserStore>()(
   )
 );
 
-// Setup auth state listener
-if (typeof window !== 'undefined') {
-  supabase.auth.onAuthStateChange((event, session) => {
-    const store = useUserStore.getState();
-    
-    if (event === 'SIGNED_IN' && session) {
-      // Don't need to do anything here since refreshUser will be called in App.tsx
-    } else if (event === 'SIGNED_OUT') {
-      store.setUser(null);
-    }
-  });
-}
+// Remove the auth state listener from here since we're now handling it in AuthContext
+// This prevents duplicate handling and potential state conflicts

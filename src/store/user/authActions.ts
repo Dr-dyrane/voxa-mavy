@@ -65,6 +65,10 @@ export const createAuthActions = (get: any, set: any) => ({
               },
               isLoading: false
             });
+          } else {
+            // Make sure we still set isLoading to false even if we couldn't fetch the new user
+            console.error("Failed to fetch newly created user profile");
+            set({ isLoading: false, error: "Failed to fetch user profile" });
           }
         } else {
           // User profile exists
@@ -161,25 +165,27 @@ export const createAuthActions = (get: any, set: any) => ({
             username,
             status: 'online',
             lastSeen: new Date()
-          }
+          },
+          isLoading: false
         });
         
         toast.success("Welcome to Voxa!", {
           description: "Your account has been created successfully."
         });
+      } else {
+        // Make sure to set loading to false even if we couldn't create the user
+        set({ isLoading: false });
       }
     } catch (err: any) {
-      set({ error: err.message });
+      set({ error: err.message, isLoading: false });
       toast.error("Registration failed", {
         description: err.message
       });
-    } finally {
-      set({ isLoading: false });
     }
   },
   
   logout: async () => {
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
     
     try {
       // Update user presence status before logout
@@ -194,6 +200,7 @@ export const createAuthActions = (get: any, set: any) => ({
       const { error } = await supabase.auth.signOut();
       
       if (error) {
+        console.error("Logout error:", error.message);
         set({ isLoading: false, error: error.message });
         toast.error("Logout failed", {
           description: error.message
@@ -201,17 +208,25 @@ export const createAuthActions = (get: any, set: any) => ({
         return;
       }
       
+      // Always reset the state, even if there was an error updating presence
       set({
         isLoading: false,
         isAuthenticated: false,
         user: null,
       });
       
+      console.log("Logout successful, reset authentication state");
+      
       toast.info("Logged out", {
         description: "You have been successfully logged out."
       });
     } catch (err: any) {
-      set({ isLoading: false, error: err.message });
+      console.error("Logout exception:", err.message);
+      set({ isLoading: false, error: err.message, isAuthenticated: false, user: null });
+      // Still log the user out locally even if there was an error
+      toast.info("Logged out", {
+        description: "You have been logged out."
+      });
     }
   },
 });
