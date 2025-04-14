@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { User } from "./types";
@@ -56,7 +55,8 @@ export const createAuthActions = (get: any, set: any) => ({
                 avatarUrl: newUserData.avatar_url,
                 status: newUserData.status as "online" | "offline" | "away" | "busy",
                 lastSeen: new Date(newUserData.last_seen)
-              }
+              },
+              isLoading: false
             });
           }
         } else {
@@ -69,7 +69,8 @@ export const createAuthActions = (get: any, set: any) => ({
               avatarUrl: userData.avatar_url,
               status: userData.status as "online" | "offline" | "away" | "busy",
               lastSeen: new Date(userData.last_seen)
-            }
+            },
+            isLoading: false
           });
         }
         
@@ -85,12 +86,10 @@ export const createAuthActions = (get: any, set: any) => ({
         });
       }
     } catch (err: any) {
-      set({ error: err.message });
+      set({ error: err.message, isLoading: false });
       toast.error("Login failed", {
         description: err.message
       });
-    } finally {
-      set({ isLoading: false });
     }
   },
   

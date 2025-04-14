@@ -35,6 +35,7 @@ const App = () => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        // Use setTimeout to prevent potential deadlock
         setTimeout(() => {
           refreshUser();
         }, 0);
@@ -51,30 +52,24 @@ const App = () => {
     
     if (isAuthenticated) {
       // Initialize all real-time features when authenticated
-      // Define the cleanup functions with proper types (can be undefined or function)
-      let cleanupCall: (() => void) | undefined;
-      let cleanupFriends: (() => void) | undefined;
-      let cleanupPresence: (() => void) | undefined;
-      
-      // Call initialization functions and store their cleanup functions
-      // The initialization functions might return undefined, so we need to handle that
-      const callCleanup = initializeCallStore();
-      const friendsCleanup = initializeFriendsRealtime();
-      const presenceCleanup = initializePresence();
-      
-      // Assign the cleanup functions only if they exist
-      if (callCleanup) cleanupCall = callCleanup;
-      if (friendsCleanup) cleanupFriends = friendsCleanup;
-      if (presenceCleanup) cleanupPresence = presenceCleanup;
-      
-      return () => {
-        // Use optional chaining to safely call cleanup functions
-        cleanupCall?.();
-        cleanupFriends?.();
-        cleanupPresence?.();
+      const cleanup = () => {
+        // Safe cleanup function that handles potentially undefined cleanups
+        const cleanups = [
+          initializeCallStore(),
+          initializeFriendsRealtime(),
+          initializePresence()
+        ];
+        
+        return () => {
+          // Call each cleanup function if it exists
+          cleanups.forEach(cleanup => typeof cleanup === 'function' && cleanup());
+        };
       };
+      
+      return cleanup();
     }
-    // Return empty cleanup function to ensure correct typing
+    
+    // Return empty cleanup function for when not authenticated
     return () => {};
   }, [initializeCallStore, initializeFriendsRealtime, initializePresence]);
 

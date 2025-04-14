@@ -15,11 +15,13 @@ export default function Auth() {
   };
   
   useEffect(() => {
+    // This effect will run whenever isAuthenticated changes
     if (isAuthenticated) {
       navigate("/chat", { replace: true });
     }
   }, [isAuthenticated, navigate]);
   
+  // This provides an immediate redirect if already authenticated
   if (isAuthenticated) {
     return <Navigate to="/chat" replace />;
   }
