@@ -22,8 +22,17 @@ export function MainLayout() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  console.log("MainLayout rendering with auth state:", { isAuthenticated, isLoading });
+
   if (isLoading) {
-    return <div className="h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   // If not authenticated, redirect to auth page

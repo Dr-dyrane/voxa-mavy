@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { User } from "./types";
@@ -7,18 +8,22 @@ export const createAuthActions = (get: any, set: any) => ({
     set({ isLoading: true, error: null });
     
     try {
+      console.log("Login attempt for:", email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
       
       if (error) {
+        console.error("Login error:", error.message);
         set({ isLoading: false, error: error.message });
         toast.error("Login failed", {
           description: error.message
         });
         return;
       }
+      
+      console.log("Login successful, fetching user profile");
       
       if (data.user) {
         // Fetch user profile from our users table
@@ -29,6 +34,7 @@ export const createAuthActions = (get: any, set: any) => ({
           .single();
           
         if (userError || !userData) {
+          console.log("No user profile found, creating one");
           // If no profile exists, create one
           await supabase.from('users').insert([
             {
@@ -47,6 +53,7 @@ export const createAuthActions = (get: any, set: any) => ({
             .single();
             
           if (newUserData) {
+            console.log("New user profile created and fetched");
             set({
               isAuthenticated: true,
               user: {
@@ -61,6 +68,7 @@ export const createAuthActions = (get: any, set: any) => ({
           }
         } else {
           // User profile exists
+          console.log("Existing user profile found");
           set({
             isAuthenticated: true,
             user: {
@@ -84,8 +92,11 @@ export const createAuthActions = (get: any, set: any) => ({
         toast.success("Welcome back!", {
           description: "You've successfully logged in."
         });
+        
+        console.log("Login flow complete, authentication state updated");
       }
     } catch (err: any) {
+      console.error("Login exception:", err.message);
       set({ error: err.message, isLoading: false });
       toast.error("Login failed", {
         description: err.message

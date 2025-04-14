@@ -11,8 +11,11 @@ export default function Chat() {
   const { fetchConversations, initializeRealtime } = useChatStore();
   
   useEffect(() => {
-    if (isAuthenticated) {
-      // Fetch conversations when the component mounts
+    console.log("Chat page mount with auth state:", { isAuthenticated, isLoading });
+    
+    if (isAuthenticated && !isLoading) {
+      console.log("Chat page: Fetching conversations and initializing realtime");
+      // Fetch conversations when the component mounts and we're authenticated
       fetchConversations();
       
       // Initialize realtime listeners
@@ -20,13 +23,22 @@ export default function Chat() {
       
       // Clean up listeners when component unmounts
       return () => {
+        console.log("Chat page: Cleaning up realtime listeners");
         if (typeof cleanup === 'function') cleanup();
       };
     }
-  }, [isAuthenticated, fetchConversations, initializeRealtime]);
+  }, [isAuthenticated, isLoading, fetchConversations, initializeRealtime]);
   
   if (isLoading) {
-    return <div className="h-full flex items-center justify-center">Loading...</div>;
+    console.log("Chat page: Still loading auth state");
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
   
   if (!isAuthenticated) {

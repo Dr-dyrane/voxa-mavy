@@ -28,6 +28,8 @@ export default function Auth() {
     return <Navigate to="/chat" replace />;
   }
   
+  console.log("Auth page rendering with state:", { isAuthenticated, isLoading });
+  
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center bg-gradient-to-b from-background to-secondary/20 p-4">
       {/* Decorative elements */}
@@ -37,7 +39,14 @@ export default function Auth() {
       </div>
       
       <div className="z-10 w-full max-w-md">
-        {isLogin ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center p-8 bg-background/80 rounded-lg shadow-lg">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Checking authentication...</p>
+            </div>
+          </div>
+        ) : isLogin ? (
           <LoginForm onToggleForm={toggleForm} />
         ) : (
           <RegisterForm onToggleForm={toggleForm} />

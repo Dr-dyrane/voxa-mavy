@@ -21,37 +21,45 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check auth state on mount and listen for changes
   useEffect(() => {
-    const checkAuth = async () => {
-      // Initial auth check from Supabase directly
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // If we have a session but userStore doesn't reflect it, refresh user data
-      if (session && !isAuthenticated) {
-        await refreshUser();
-      }
-      
-      setAuthChecked(true);
-    };
+    console.log("AuthContext: Setting up auth state check and listener");
 
-    checkAuth();
-
-    // Listen for auth changes
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         console.log('Auth state changed:', event, session ? 'User authenticated' : 'No session');
         
-        // Use setTimeout to prevent potential deadlock
-        setTimeout(() => {
-          refreshUser();
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || 
+            (event === 'INITIAL_SESSION' && session)) {
+          // Use setTimeout to prevent potential deadlock with Supabase client
+          setTimeout(() => {
+            console.log('Refreshing user after auth event:', event);
+            refreshUser().then(() => setAuthChecked(true));
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          console.log('User signed out');
           setAuthChecked(true);
-        }, 0);
+        }
       }
     );
 
+    // THEN check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial session check:", session ? 'Session exists' : 'No session');
+      
+      if (session) {
+        console.log('Found existing session, refreshing user data');
+        refreshUser().then(() => setAuthChecked(true));
+      } else {
+        console.log('No existing session found');
+        setAuthChecked(true);
+      }
+    });
+
     return () => {
+      console.log("Cleaning up auth subscription");
       subscription.unsubscribe();
     };
-  }, [isAuthenticated, refreshUser]);
+  }, [refreshUser]); // Only depend on refreshUser to avoid re-running this effect
 
   // Provide auth state to all child components
   const value = {
@@ -59,5 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     isLoading: isLoading || !authChecked
   };
 
+  console.log("AuthContext state:", { isAuthenticated, isLoading: isLoading || !authChecked, authChecked });
+  
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
