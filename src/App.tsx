@@ -51,9 +51,14 @@ const App = () => {
     
     if (isAuthenticated) {
       // Initialize all real-time features when authenticated
-      const cleanupCall = initializeCallStore();
-      const cleanupFriends = initializeFriendsRealtime();
-      const cleanupPresence = initializePresence();
+      let cleanupCall: (() => void) | undefined;
+      let cleanupFriends: (() => void) | undefined;
+      let cleanupPresence: (() => void) | undefined;
+      
+      // Call initialization functions and store their cleanup functions
+      cleanupCall = initializeCallStore();
+      cleanupFriends = initializeFriendsRealtime();
+      cleanupPresence = initializePresence();
       
       return () => {
         if (typeof cleanupCall === 'function') cleanupCall();
@@ -87,4 +92,3 @@ const App = () => {
 };
 
 export default App;
-
