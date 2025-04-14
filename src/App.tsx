@@ -34,7 +34,7 @@ const App = () => {
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      () => {
+      (event, session) => {
         setTimeout(() => {
           refreshUser();
         }, 0);
@@ -87,3 +87,4 @@ const App = () => {
 };
 
 export default App;
+
