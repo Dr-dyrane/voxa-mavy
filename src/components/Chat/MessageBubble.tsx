@@ -1,8 +1,9 @@
 
-import { Message, useChatStore } from "@/store/chatStore";
+import { useChatStore } from "@/store/chat/chatStore";
 import { formatDistanceToNow } from "date-fns";
-import { User } from "@/store/userStore";
+import { User } from "@/store/user/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Message } from "@/store/chat/types";
 
 interface MessageBubbleProps {
   message: Message;

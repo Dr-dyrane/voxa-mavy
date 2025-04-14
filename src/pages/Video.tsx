@@ -1,5 +1,5 @@
 
-import { useUserStore } from "@/store/userStore";
+import { useUserStore } from "@/store/user/userStore";
 import { Navigate } from "react-router-dom";
 import { CallList } from "@/components/Call/CallList";
 

@@ -12,10 +12,11 @@ import {
   DialogTitle,
   DialogTrigger 
 } from "@/components/ui/dialog";
-import { useChatStore } from "@/store/chatStore";
-import { useUserStore } from "@/store/userStore";
+import { useChatStore } from "@/store/chat/chatStore";
+import { useUserStore } from "@/store/user/userStore";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { User } from "@/store/user/types";
 
 export function ChatList() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -90,10 +91,14 @@ export function ChatList() {
   };
   
   // Filter users for the new conversation dialog
-  const filteredUsers = Object.values(users).filter(user => 
-    user.id !== currentUser?.id && 
-    user.username.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = Object.values(users).filter(user => {
+    if (!user || typeof user !== 'object') return false;
+    const typedUser = user as User;
+    return (
+      typedUser.id !== currentUser?.id && 
+      typedUser.username.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
   
   // Filter conversations for the chat list
   const filteredConversations = conversations.filter(conversation => {
@@ -135,39 +140,42 @@ export function ChatList() {
               />
               <ScrollArea className="h-[300px]">
                 <div className="space-y-2">
-                  {filteredUsers.map((user) => (
-                    <button
-                      key={user.id}
-                      className={`w-full text-left p-3 rounded-lg flex items-center space-x-3 transition-colors ${
-                        selectedUser === user.id
-                          ? "bg-accent text-accent-foreground"
-                          : "hover:bg-accent/10"
-                      }`}
-                      onClick={() => setSelectedUser(user.id)}
-                    >
-                      <Avatar>
-                        <AvatarImage src={user.avatarUrl} />
-                        <AvatarFallback>
-                          {user.username.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium">{user.username}</div>
-                        <div className="text-xs flex items-center">
-                          <span 
-                            className={`inline-block h-2 w-2 rounded-full mr-1 ${
-                              user.status === 'online' 
-                                ? 'bg-green-500' 
-                                : user.status === 'away'
-                                  ? 'bg-yellow-500'
-                                  : 'bg-gray-400'
-                            }`} 
-                          />
-                          <span>{user.status}</span>
+                  {filteredUsers.map((user) => {
+                    const typedUser = user as User;
+                    return (
+                      <button
+                        key={typedUser.id}
+                        className={`w-full text-left p-3 rounded-lg flex items-center space-x-3 transition-colors ${
+                          selectedUser === typedUser.id
+                            ? "bg-accent text-accent-foreground"
+                            : "hover:bg-accent/10"
+                        }`}
+                        onClick={() => setSelectedUser(typedUser.id)}
+                      >
+                        <Avatar>
+                          <AvatarImage src={typedUser.avatarUrl} />
+                          <AvatarFallback>
+                            {typedUser.username.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium">{typedUser.username}</div>
+                          <div className="text-xs flex items-center">
+                            <span 
+                              className={`inline-block h-2 w-2 rounded-full mr-1 ${
+                                typedUser.status === 'online' 
+                                  ? 'bg-green-500' 
+                                  : typedUser.status === 'away'
+                                    ? 'bg-yellow-500'
+                                    : 'bg-gray-400'
+                              }`} 
+                            />
+                            <span>{typedUser.status}</span>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
+                      </button>
+                    );
+                  })}
                   
                   {filteredUsers.length === 0 && (
                     <div className="text-center p-4 text-muted-foreground">
@@ -196,7 +204,7 @@ export function ChatList() {
             const otherUserId = conversation.participantIds.find(
               id => id !== currentUser?.id
             );
-            const otherUser = otherUserId ? users[otherUserId] : null;
+            const otherUser = otherUserId && users[otherUserId] as User | undefined;
             
             if (!otherUser) return null;
             

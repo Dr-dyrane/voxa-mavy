@@ -1,14 +1,13 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Send, Paperclip, Smile, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useChatStore } from "@/store/chatStore";
+import { useChatStore } from "@/store/chat/chatStore";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TypingIndicator } from "./TypingIndicator";
 import { MessageBubble } from "./MessageBubble";
-import { useUserStore } from "@/store/userStore";
+import { useUserStore } from "@/store/user/userStore";
 
 export function ChatWindow() {
   const [message, setMessage] = useState("");
