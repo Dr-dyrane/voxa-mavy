@@ -3,7 +3,6 @@ import { useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ModeToggle } from "./ModeToggle";
-import { useUserStore } from "@/store/user/userStore";
 import { Outlet, Navigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,10 @@ import { Menu } from "lucide-react";
 import { VoxaTextLogo } from "../VoxaLogo";
 import { CallPanel } from "../Call/CallPanel";
 import { useCallStore } from "@/store/call/callStore";
+import { useAuth } from "@/context/AuthContext";
 
 export function MainLayout() {
-  const { isAuthenticated } = useUserStore();
+  const { isAuthenticated, isLoading } = useAuth();
   const { activeCall } = useCallStore();
   const isMobile = useIsMobile();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
@@ -22,8 +22,13 @@ export function MainLayout() {
     setSidebarOpen(!sidebarOpen);
   };
 
+  if (isLoading) {
+    return <div className="h-screen flex items-center justify-center">Loading...</div>;
+  }
+
   // If not authenticated, redirect to auth page
   if (!isAuthenticated) {
+    console.log("MainLayout: User not authenticated, redirecting to /auth");
     return <Navigate to="/auth" replace />;
   }
 

@@ -2,12 +2,12 @@
 import { useState, useEffect } from "react";
 import { LoginForm } from "@/components/Auth/LoginForm";
 import { RegisterForm } from "@/components/Auth/RegisterForm";
-import { useUserStore } from "@/store/user/userStore";
 import { Navigate, useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
-  const { isAuthenticated } = useUserStore();
+  const { isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   
   const toggleForm = () => {
@@ -16,13 +16,15 @@ export default function Auth() {
   
   useEffect(() => {
     // This effect will run whenever isAuthenticated changes
-    if (isAuthenticated) {
+    if (isAuthenticated && !isLoading) {
+      console.log("Auth page: User is authenticated, redirecting to /chat");
       navigate("/chat", { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, isLoading, navigate]);
   
   // This provides an immediate redirect if already authenticated
-  if (isAuthenticated) {
+  if (isAuthenticated && !isLoading) {
+    console.log("Auth page: Immediate redirect to /chat");
     return <Navigate to="/chat" replace />;
   }
   

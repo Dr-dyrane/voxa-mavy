@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect } from "react";
 
+import { AuthProvider } from "./context/AuthContext";
 import { MainLayout } from "./components/Layout/MainLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -18,7 +19,6 @@ import { useUserStore } from "./store/user/userStore";
 import { useCallStore } from "./store/call/callStore";
 import { useFriendsStore } from "./store/friends/friendsStore";
 import { usePresenceStore } from "./store/presence/presenceStore";
-import { supabase } from "./integrations/supabase/client";
 
 const queryClient = new QueryClient();
 
@@ -27,29 +27,10 @@ const App = () => {
   const { initializeCallStore } = useCallStore();
   const { initializeRealtime: initializeFriendsRealtime } = useFriendsStore();
   const { initializePresence } = usePresenceStore();
+  const { isAuthenticated } = useUserStore();
 
+  // Initialize real-time features when authenticated
   useEffect(() => {
-    // Initial auth check
-    refreshUser();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        // Use setTimeout to prevent potential deadlock
-        setTimeout(() => {
-          refreshUser();
-        }, 0);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [refreshUser]);
-
-  useEffect(() => {
-    const { isAuthenticated } = useUserStore.getState();
-    
     if (isAuthenticated) {
       // Initialize all real-time features when authenticated
       const cleanup = () => {
@@ -71,26 +52,28 @@ const App = () => {
     
     // Return empty cleanup function for when not authenticated
     return () => {};
-  }, [initializeCallStore, initializeFriendsRealtime, initializePresence]);
+  }, [isAuthenticated, initializeCallStore, initializeFriendsRealtime, initializePresence]);
 
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/auth" element={<Auth />} />
-            <Route element={<MainLayout />}>
-              <Route path="/" element={<Navigate to="/chat" replace />} />
-              <Route path="/chat" element={<Chat />} />
-              <Route path="/call" element={<Call />} />
-              <Route path="/video" element={<Video />} />
-              <Route path="/contacts" element={<Contacts />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={<Auth />} />
+              <Route element={<MainLayout />}>
+                <Route path="/" element={<Navigate to="/chat" replace />} />
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/call" element={<Call />} />
+                <Route path="/video" element={<Video />} />
+                <Route path="/contacts" element={<Contacts />} />
+              </Route>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
   );
