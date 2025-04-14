@@ -1,221 +1,123 @@
 
 import { create } from "zustand";
-import { WebRTCHandler } from "./webRTCHandler";
-import { Call, CallType, CallStatus, IncomingCall } from "./types";
-import { supabase } from "@/integrations/supabase/client";
-import { useUserStore } from "@/store/user/userStore";
-import { toast } from "sonner";
+
+export type CallType = "audio" | "video";
+export type CallStatus = "idle" | "ringing" | "connecting" | "connected" | "ended";
+
+export interface Call {
+  id: string;
+  callerId: string;
+  receiverId: string;
+  type: CallType;
+  status: CallStatus;
+  startedAt?: Date;
+  endedAt?: Date;
+}
 
 interface CallStore {
   activeCall: Call | null;
-  incomingCall: IncomingCall | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   isMuted: boolean;
   isCameraOn: boolean;
   isScreenSharing: boolean;
   error: string | null;
-  webRTC: WebRTCHandler | null;
   
   // Actions
-  initializeCallStore: () => void;
   startCall: (receiverId: string, type: CallType) => Promise<void>;
   answerCall: () => Promise<void>;
-  rejectCall: () => Promise<void>;
   endCall: () => Promise<void>;
   toggleMute: () => void;
   toggleCamera: () => void;
   toggleScreenShare: () => void;
+  initializeCallStore: () => (() => void) | undefined;
 }
 
 export const useCallStore = create<CallStore>()((set, get) => ({
   activeCall: null,
-  incomingCall: null,
   localStream: null,
   remoteStream: null,
   isMuted: false,
   isCameraOn: true,
   isScreenSharing: false,
   error: null,
-  webRTC: null,
   
   initializeCallStore: () => {
-    const user = useUserStore.getState().user;
-    if (!user) return;
-    
-    // Create WebRTC handler
-    const webRTC = new WebRTCHandler(user.id);
-    
-    // Set up event handlers
-    webRTC.onLocalStream = (stream: MediaStream) => {
-      set({ localStream: stream });
-    };
-    
-    webRTC.onRemoteStream = (stream: MediaStream) => {
-      set({ remoteStream: stream });
-    };
-    
-    webRTC.onConnectionStateChange = (state: RTCPeerConnectionState) => {
-      if (state === 'connected') {
-        set((s) => ({
-          activeCall: s.activeCall ? { ...s.activeCall, status: 'connected' } : null
-        }));
-      } else if (
-        state === 'disconnected' || 
-        state === 'failed' || 
-        state === 'closed'
-      ) {
-        if (get().activeCall) {
-          setTimeout(() => {
-            set({ activeCall: null, localStream: null, remoteStream: null });
-          }, 1000);
-        }
-      }
-    };
-    
-    set({ webRTC });
-    
-    // Listen for incoming calls
-    const incomingCallChannel = supabase
-      .channel('public:calls')
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'calls',
-          filter: `receiver_id=eq.${user.id}`
-        },
-        (payload) => {
-          const callData = payload.new;
-          
-          // Only handle ringing calls
-          if (callData.status === 'ringing') {
-            set({
-              incomingCall: {
-                id: callData.id,
-                callerId: callData.caller_id,
-                type: callData.call_type as CallType
-              }
-            });
-            
-            // Show notification
-            toast("Incoming Call", {
-              description: "Someone is calling you",
-              action: {
-                label: "Answer",
-                onClick: () => get().answerCall()
-              },
-              onDismiss: () => {
-                get().rejectCall();
-              }
-            });
-          }
-        }
-      )
-      .subscribe();
-      
-    // Return cleanup function
+    // Initialize call-related functionality here
+    // Return a cleanup function or undefined
     return () => {
-      supabase.removeChannel(incomingCallChannel);
-      if (get().webRTC) {
-        get().webRTC.endCall();
-      }
+      // Cleanup resources if needed
     };
   },
   
-  startCall: async (receiverId: string, type: CallType) => {
+  startCall: async (receiverId, type) => {
+    set({ 
+      activeCall: {
+        id: `call-${Date.now()}`,
+        callerId: "user1", // Would come from auth
+        receiverId,
+        type,
+        status: "ringing",
+        startedAt: new Date(),
+      } 
+    });
+    
     try {
-      const webRTC = get().webRTC;
-      if (!webRTC) throw new Error("WebRTC not initialized");
+      // Mock getting user media
+      const constraints = {
+        audio: true,
+        video: type === "video",
+      };
       
-      const callType = type === "audio" ? "audio" : "video";
-      const isVideo = callType === "video";
+      // In a real implementation, this would request actual media
+      // const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Initialize call and get local stream
-      const localStream = await webRTC.initializeCall(receiverId, isVideo);
+      // set({ localStream: stream });
       
-      set({
-        activeCall: {
-          id: webRTC.callId!,
-          callerId: webRTC.userId!,
-          receiverId: receiverId,
-          type: callType,
-          status: "ringing",
-          startedAt: new Date(),
-        },
-        localStream,
-        error: null
-      });
-    } catch (error: any) {
-      set({ error: error.message });
-      toast.error("Call failed", {
-        description: error.message
-      });
+      // After a delay, simulate the call being answered
+      setTimeout(() => {
+        set((state) => ({
+          activeCall: state.activeCall ? {
+            ...state.activeCall,
+            status: "connected",
+          } : null
+        }));
+      }, 2000);
+      
+    } catch (error) {
+      set({ error: "Failed to access media devices" });
     }
   },
   
   answerCall: async () => {
     try {
-      const { incomingCall, webRTC } = get();
-      if (!incomingCall || !webRTC) throw new Error("No incoming call or WebRTC not initialized");
-      
-      const isVideo = incomingCall.type === "video";
-      
-      // Answer the call and get local stream
-      const localStream = await webRTC.answerCall(
-        incomingCall.id, 
-        incomingCall.callerId, 
-        isVideo
-      );
-      
-      set({
-        activeCall: {
-          id: incomingCall.id,
-          callerId: incomingCall.callerId,
-          receiverId: webRTC.userId!,
-          type: incomingCall.type,
+      // Mock answering a call
+      set((state) => ({
+        activeCall: state.activeCall ? {
+          ...state.activeCall,
           status: "connecting",
-          startedAt: new Date(),
-        },
-        incomingCall: null,
-        localStream,
-        error: null
-      });
-    } catch (error: any) {
-      set({ error: error.message, incomingCall: null });
-      toast.error("Failed to answer call", {
-        description: error.message
-      });
-    }
-  },
-  
-  rejectCall: async () => {
-    const { incomingCall } = get();
-    if (!incomingCall) return;
-    
-    try {
-      // Update call status to ended
-      await supabase
-        .from('calls')
-        .update({ 
-          status: 'ended',
-          ended_at: new Date().toISOString()
-        })
-        .eq('id', incomingCall.id);
-        
-      set({ incomingCall: null });
-    } catch (error: any) {
-      console.error("Error rejecting call:", error);
-      set({ incomingCall: null });
+        } : null
+      }));
+      
+      // Simulate connection delay
+      setTimeout(() => {
+        set((state) => ({
+          activeCall: state.activeCall ? {
+            ...state.activeCall,
+            status: "connected",
+          } : null
+        }));
+      }, 1000);
+      
+    } catch (error) {
+      set({ error: "Failed to answer call" });
     }
   },
   
   endCall: async () => {
-    const { activeCall, webRTC } = get();
+    const { activeCall } = get();
     
-    if (activeCall && webRTC) {
-      await webRTC.endCall();
-      
+    if (activeCall) {
       set({
         activeCall: {
           ...activeCall,
@@ -224,7 +126,12 @@ export const useCallStore = create<CallStore>()((set, get) => ({
         }
       });
       
-      // After a delay, reset the call state
+      // Clean up streams
+      get().localStream?.getTracks().forEach(track => track.stop());
+      
+      // In a real app, we'd send this to the signaling server
+      
+      // After a delay, set active call to null
       setTimeout(() => {
         set({ activeCall: null, localStream: null, remoteStream: null });
       }, 1000);
@@ -232,29 +139,31 @@ export const useCallStore = create<CallStore>()((set, get) => ({
   },
   
   toggleMute: () => {
-    const { isMuted, webRTC } = get();
+    const { isMuted, localStream } = get();
     
-    if (webRTC) {
-      webRTC.toggleMute(!isMuted);
-      set({ isMuted: !isMuted });
+    if (localStream) {
+      localStream.getAudioTracks().forEach(track => {
+        track.enabled = isMuted;
+      });
     }
+    
+    set({ isMuted: !isMuted });
   },
   
   toggleCamera: () => {
-    const { isCameraOn, webRTC } = get();
+    const { isCameraOn, localStream } = get();
     
-    if (webRTC) {
-      webRTC.toggleCamera(!isCameraOn);
-      set({ isCameraOn: !isCameraOn });
+    if (localStream) {
+      localStream.getVideoTracks().forEach(track => {
+        track.enabled = !isCameraOn;
+      });
     }
+    
+    set({ isCameraOn: !isCameraOn });
   },
   
   toggleScreenShare: () => {
-    const { isScreenSharing, webRTC } = get();
-    
-    if (webRTC) {
-      webRTC.toggleScreenShare(!isScreenSharing);
-      set({ isScreenSharing: !isScreenSharing });
-    }
+    // This would be implemented with navigator.mediaDevices.getDisplayMedia
+    set({ isScreenSharing: !get().isScreenSharing });
   },
 }));

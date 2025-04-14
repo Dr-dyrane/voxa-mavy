@@ -51,22 +51,31 @@ const App = () => {
     
     if (isAuthenticated) {
       // Initialize all real-time features when authenticated
+      // Define the cleanup functions with proper types (can be undefined or function)
       let cleanupCall: (() => void) | undefined;
       let cleanupFriends: (() => void) | undefined;
       let cleanupPresence: (() => void) | undefined;
       
       // Call initialization functions and store their cleanup functions
-      cleanupCall = initializeCallStore();
-      cleanupFriends = initializeFriendsRealtime();
-      cleanupPresence = initializePresence();
+      // The initialization functions might return undefined, so we need to handle that
+      const callCleanup = initializeCallStore();
+      const friendsCleanup = initializeFriendsRealtime();
+      const presenceCleanup = initializePresence();
+      
+      // Assign the cleanup functions only if they exist
+      if (callCleanup) cleanupCall = callCleanup;
+      if (friendsCleanup) cleanupFriends = friendsCleanup;
+      if (presenceCleanup) cleanupPresence = presenceCleanup;
       
       return () => {
-        // Only call cleanup if it's a function
+        // Use optional chaining to safely call cleanup functions
         cleanupCall?.();
         cleanupFriends?.();
         cleanupPresence?.();
       };
     }
+    // Return empty cleanup function to ensure correct typing
+    return () => {};
   }, [initializeCallStore, initializeFriendsRealtime, initializePresence]);
 
   return (

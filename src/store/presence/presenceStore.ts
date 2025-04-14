@@ -75,7 +75,7 @@ export const usePresenceStore = create<PresenceState>()((set, get) => ({
   
   initializePresence: () => {
     const currentUser = useUserStore.getState().user;
-    if (!currentUser) return;
+    if (!currentUser) return undefined;
     
     // Set initial presence
     get().updateStatus("online");
