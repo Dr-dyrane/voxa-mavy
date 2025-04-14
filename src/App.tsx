@@ -61,9 +61,10 @@ const App = () => {
       cleanupPresence = initializePresence();
       
       return () => {
-        if (typeof cleanupCall === 'function') cleanupCall();
-        if (typeof cleanupFriends === 'function') cleanupFriends();
-        if (typeof cleanupPresence === 'function') cleanupPresence();
+        // Only call cleanup if it's a function
+        cleanupCall?.();
+        cleanupFriends?.();
+        cleanupPresence?.();
       };
     }
   }, [initializeCallStore, initializeFriendsRealtime, initializePresence]);
