@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { useUserStore } from "@/store/userStore";
+import { useUserStore } from "@/store/user/userStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

@@ -56,9 +56,9 @@ const App = () => {
       const cleanupPresence = initializePresence();
       
       return () => {
-        if (cleanupCall) cleanupCall();
-        if (cleanupFriends) cleanupFriends();
-        if (cleanupPresence) cleanupPresence();
+        if (typeof cleanupCall === 'function') cleanupCall();
+        if (typeof cleanupFriends === 'function') cleanupFriends();
+        if (typeof cleanupPresence === 'function') cleanupPresence();
       };
     }
   }, [initializeCallStore, initializeFriendsRealtime, initializePresence]);
@@ -72,7 +72,7 @@ const App = () => {
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route element={<MainLayout />}>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<Navigate to="/chat" replace />} />
               <Route path="/chat" element={<Chat />} />
               <Route path="/call" element={<Call />} />
               <Route path="/video" element={<Video />} />

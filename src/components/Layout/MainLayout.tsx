@@ -3,14 +3,14 @@ import { useState } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { ModeToggle } from "./ModeToggle";
-import { useUserStore } from "@/store/userStore";
-import { Outlet } from "react-router-dom";
+import { useUserStore } from "@/store/user/userStore";
+import { Outlet, Navigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
 import { VoxaTextLogo } from "../VoxaLogo";
 import { CallPanel } from "../Call/CallPanel";
-import { useCallStore } from "@/store/callStore";
+import { useCallStore } from "@/store/call/callStore";
 
 export function MainLayout() {
   const { isAuthenticated } = useUserStore();
@@ -22,9 +22,9 @@ export function MainLayout() {
     setSidebarOpen(!sidebarOpen);
   };
 
-  // If not authenticated, render children directly (login/register pages)
+  // If not authenticated, redirect to auth page
   if (!isAuthenticated) {
-    return <Outlet />;
+    return <Navigate to="/auth" replace />;
   }
 
   return (

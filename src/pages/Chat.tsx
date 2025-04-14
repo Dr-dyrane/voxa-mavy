@@ -1,9 +1,9 @@
 
 import { useEffect } from "react";
-import { useChatStore } from "@/store/chatStore";
+import { useChatStore } from "@/store/chat/chatStore";
 import { ChatList } from "@/components/Chat/ChatList";
 import { ChatWindow } from "@/components/Chat/ChatWindow";
-import { useUserStore } from "@/store/userStore";
+import { useUserStore } from "@/store/user/userStore";
 import { Navigate } from "react-router-dom";
 
 export default function Chat() {
@@ -20,7 +20,7 @@ export default function Chat() {
       
       // Clean up listeners when component unmounts
       return () => {
-        if (cleanup) cleanup();
+        if (typeof cleanup === 'function') cleanup();
       };
     }
   }, [isAuthenticated, fetchConversations, initializeRealtime]);

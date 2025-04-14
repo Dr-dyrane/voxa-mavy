@@ -1,20 +1,27 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LoginForm } from "@/components/Auth/LoginForm";
 import { RegisterForm } from "@/components/Auth/RegisterForm";
-import { useUserStore } from "@/store/userStore";
-import { Navigate } from "react-router-dom";
+import { useUserStore } from "@/store/user/userStore";
+import { Navigate, useNavigate } from "react-router-dom";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const { isAuthenticated } = useUserStore();
+  const navigate = useNavigate();
   
   const toggleForm = () => {
     setIsLogin(!isLogin);
   };
   
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/chat", { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+  
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/chat" replace />;
   }
   
   return (
