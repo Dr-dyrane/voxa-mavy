@@ -5,16 +5,15 @@ import { ChatList } from "@/components/Chat/ChatList";
 import { ChatWindow } from "@/components/Chat/ChatWindow";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Chat() {
   const { isAuthenticated, isLoading } = useAuth();
   const { fetchConversations, initializeRealtime } = useChatStore();
+  const isMobile = useIsMobile();
   
   useEffect(() => {
-    console.log("Chat page mount with auth state:", { isAuthenticated, isLoading });
-    
     if (isAuthenticated && !isLoading) {
-      console.log("Chat page: Fetching conversations and initializing realtime");
       // Fetch conversations when the component mounts and we're authenticated
       fetchConversations();
       
@@ -23,14 +22,12 @@ export default function Chat() {
       
       // Clean up listeners when component unmounts
       return () => {
-        console.log("Chat page: Cleaning up realtime listeners");
         if (typeof cleanup === 'function') cleanup();
       };
     }
   }, [isAuthenticated, isLoading, fetchConversations, initializeRealtime]);
   
   if (isLoading) {
-    console.log("Chat page: Still loading auth state");
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
@@ -42,18 +39,27 @@ export default function Chat() {
   }
   
   if (!isAuthenticated) {
-    console.log("Chat page: User not authenticated, redirecting to /auth");
     return <Navigate to="/auth" replace />;
   }
   
   return (
     <div className="h-full flex">
-      <div className="w-80 border-r bg-background/80">
-        <ChatList />
-      </div>
-      <div className="flex-1">
-        <ChatWindow />
-      </div>
+      {/* On mobile, we only show either the list or the chat window */}
+      {!isMobile ? (
+        <>
+          <div className="w-80 border-r bg-background/80 overflow-hidden">
+            <ChatList />
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ChatWindow />
+          </div>
+        </>
+      ) : (
+        <div className="w-full overflow-hidden">
+          <ChatList />
+          {/* On mobile, ChatWindow will be shown via routing */}
+        </div>
+      )}
     </div>
   );
 }
