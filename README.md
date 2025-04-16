@@ -1,73 +1,248 @@
-# Welcome to your Lovable project
+**VOXA - Design Document**
 
-## Project info
+---
 
-**URL**: https://lovable.dev/projects/2ea5eeb9-436e-47b7-b48c-5e22b9f1e1f9
+**Project Name:** Voxa  
+**Type:** Real-Time Chat & Call Web Application  
+**Frontend:** Vite + React + Tailwind + shadcn/ui + lucide-react  
+**Backend:** Supabase (Auth, Database, Realtime, Storage)
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+### Product Overview
+Voxa is a real-time communication web app designed for modern users who want to effortlessly chat, make voice calls, and video calls with sleek aesthetics and high performance.
 
-**Use Lovable**
+The app will support:
+- **1-on-1 Text Chat**
+- **Voice Calls**
+- **Video Calls**
+- **Presence & Typing Indicators**
+- **Push Notifications (PWA)**
+- **Emoji Support**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/2ea5eeb9-436e-47b7-b48c-5e22b9f1e1f9) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+### Visual Identity
+- **Dark Theme Palette:**
+  - Primary: Deep Blue `#0D1B2A`
+  - Accent: Violet Purple `#7F5AF0`
+  - Highlight: Soft Peach `#FFADAD`
+  - Contrast: Black `#000000`
 
-**Use your preferred IDE**
+- **Light Theme Palette:**
+  - Base: White `#FFFFFF`
+  - Primary Text: Deep Blue `#0D1B2A`
+  - Accent: Violet Purple `#7F5AF0`
+  - Subtle Tint: Soft Peach `#FFEAEA`
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+---
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Branding & Logo
+- **App Name:** Voxa
+- **Icon Base:** `waves` (from lucide-react)
+- **Logo Concept:**
+  - Modified `waves` icon with gradient fill from Violet Purple to Peach.
+  - Smooth rounded paths to fit favicon and social images.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Tech Stack
+| Layer                  | Tech Stack                         |
+|-------------------------|------------------------------------|
+| Frontend                | React + Vite                       |
+| Styling                 | TailwindCSS + shadcn/ui           |
+| Icons                   | lucide-react                      |
+| State Management        | Zustand / Jotai                    |
+| Realtime & Auth         | Supabase                          |
+| Audio/Video Calls       | WebRTC + Supabase Signaling Table |
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### Project Structure
+```
+/src
+|-- api/
+|   |-- supabaseClient.ts
+|-- components/
+|   |-- Chat/
+|   |   |-- ChatWindow.tsx
+|   |-- Call/
+|   |   |-- CallWindow.tsx
+|-- hooks/
+|   |-- useRealtimeMessages.ts
+|   |-- useWebRTC.ts
+|-- pages/
+|   |-- Home.tsx
+|   |-- Chat.tsx
+|   |-- Call.tsx
+|-- store/
+|   |-- userStore.ts
+|   |-- chatStore.ts
+|-- utils/
+|   |-- webrtcUtils.ts
+|-- App.tsx
+|-- main.tsx
 ```
 
-**Edit a file directly in GitHub**
+---
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Supabase Schema (Comprehensive)
 
-**Use GitHub Codespaces**
+**Users Table**
+```sql
+CREATE TABLE users (
+  id uuid PRIMARY KEY REFERENCES auth.users(id),
+  username text UNIQUE NOT NULL,
+  avatar_url text,
+  status text DEFAULT 'offline',
+  last_seen timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+**Messages Table**
+```sql
+CREATE TABLE messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id uuid REFERENCES users(id),
+  receiver_id uuid REFERENCES users(id),
+  content text,
+  type text DEFAULT 'text',
+  emoji jsonb,
+  is_read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+```
 
-## What technologies are used for this project?
+**Calls Table**
+```sql
+CREATE TABLE calls (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  caller_id uuid REFERENCES users(id),
+  receiver_id uuid REFERENCES users(id),
+  status text CHECK (status IN ('initiated', 'accepted', 'rejected', 'ended')),
+  call_type text CHECK (call_type IN ('audio', 'video')),
+  started_at timestamptz,
+  ended_at timestamptz,
+  created_at timestamptz DEFAULT now()
+);
+```
 
-This project is built with:
+**Signaling Table (WebRTC)**
+```sql
+CREATE TABLE signaling (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id uuid,
+  sender_id uuid REFERENCES users(id),
+  receiver_id uuid REFERENCES users(id),
+  signal_data jsonb NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**Conversations Table**
+```sql
+CREATE TABLE conversations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  participant_ids uuid[] NOT NULL,
+  last_message_id uuid REFERENCES messages(id),
+  updated_at timestamptz DEFAULT now(),
+  created_at timestamptz DEFAULT now()
+);
+```
 
-## How can I deploy this project?
+**Friends Table**
+```sql
+CREATE TABLE friends (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id),
+  friend_id uuid REFERENCES users(id),
+  status text CHECK (status IN ('pending', 'accepted', 'blocked')),
+  created_at timestamptz DEFAULT now()
+);
+```
 
-Simply open [Lovable](https://lovable.dev/projects/2ea5eeb9-436e-47b7-b48c-5e22b9f1e1f9) and click on Share -> Publish.
+**Notifications Table**
+```sql
+CREATE TABLE notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id),
+  type text NOT NULL,
+  payload jsonb,
+  is_read boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
+```
 
-## Can I connect a custom domain to my Lovable project?
+**Presence Table**
+```sql
+CREATE TABLE presence (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES users(id),
+  status text CHECK (status IN ('online', 'offline', 'away', 'busy')),
+  last_seen timestamptz DEFAULT now()
+);
+```
 
-Yes, you can!
+---
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### WebRTC Flow (Simplified)
+1. Caller initiates call, generates WebRTC offer.
+2. Offer sent to `signaling` table.
+3. Callee receives offer via Supabase Realtime subscription.
+4. Callee responds with answer.
+5. ICE candidates are exchanged.
+6. Peer-to-Peer connection established.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+---
+
+### Core Features
+- Supabase Auth (Email, Magic Link, OAuth).
+- Real-Time Text Chat.
+- Voice and Video Calls (WebRTC).
+- Typing and Online Status Indicators.
+- Dark & Light Theming with Tailwind + shadcn/ui.
+- Progressive Web App (installable, push notifications).
+- Emoji Support for conversations.
+- Audio Alerts for messages, calls, and notifications.
+- Pop-up animations and smooth transitions for modals, chat bubbles, and system toasts.
+
+---
+
+### UI/UX & Responsiveness
+- Utilize **shadcn/ui's Layout System**:
+  - Responsive navigation patterns (sidebar, navbar, drawer) optimized for mobile and desktop.
+  - Built-in design tokens for consistent spacing, font sizes, and component styling.
+  - Smooth transitions between screens and interactions using Framer Motion animations.
+  - Adaptive components (e.g., chat windows scale with viewport, modals centered and responsive).
+
+- **Animations:**
+  - Use Framer Motion for:
+    - Page transitions.
+    - Pop-up modals.
+    - Message sending/receiving effects.
+
+- **Sounds:**
+  - Lightweight sound cues for:
+    - New message.
+    - Incoming call.
+    - Call connected/disconnected.
+
+---
+
+### Next Steps
+1. Create Supabase project and apply schema.
+2. Initialize Vite + Tailwind + shadcn/ui project.
+3. Implement `useRealtimeMessages` and `useWebRTC` hooks.
+4. Develop core pages (Home, Chat, Call).
+5. Style using design tokens for color palettes.
+6. Create assets (Logo, Favicon) based on the `waves` icon.
+7. Integrate emoji picker into ChatWindow component.
+8. Implement sound feedback and pop-up animations for enhanced user experience.
+
+---
+
+**End of Document.**
+
+Ready for implementation! Let me know when you want the code snippets or setup instructions.
+

@@ -1,0 +1,12 @@
+# Redirect all requests to index.html for SPA behavior
+/*    /index.html   200
+
+# Optional: force HTTPS
+http://*   https://:splat   301!
+
+# Optional: handle old URL patterns
+/chat/*    /   301
+/call/*    /   301
+
+# Optional: custom error page
+/404    /index.html   200
